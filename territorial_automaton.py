@@ -72,16 +72,23 @@ class TerritorialAutomaton:
             self.params.adj_data,
             self.interaction_matrix,
             self.h_weights,
-            self.params.T,
+            self.T,
             rng_rolls
         )
 
-    def run(self, n_warmup, n_experiment, snapshots=False, progbar=False):
+    def run(self, n_warmup, n_experiment, dynamic_T=None, snapshots=False, progbar=False):
+        if dynamic_T is not None:
+            dynamic_T = np.asarray(dynamic_T, dtype=np.float64)
+            if dynamic_T.shape != (n_experiment,):
+                raise ValueError(f"dynamic_T must have length n_experiment ({n_experiment}), got {dynamic_T.shape}")
         self.state = np.copy(self.params.initial_state) # Ensure we start from the initial state
         metrics = []
+        self.T = self.params.T
         for _ in tqdm(range(n_warmup), desc="Warming up", disable=not progbar):
             self.step()
-        for _ in tqdm(range(n_experiment), desc="Running experiment", disable=not progbar):
+        for i in tqdm(range(n_experiment), desc="Running experiment", disable=not progbar):
+            if dynamic_T is not None:
+                self.T = dynamic_T[i]
             self.step()
             energy = _compute_total_energy(
                 self.nodes,
@@ -128,14 +135,20 @@ def _update_node(node_idx, states, adj_indptr, adj_indices, adj_data, interactio
     - T: Temperature parameter controlling randomness.
     - rng_rolls: Pre-generated random numbers for stochastic choice (1D array length N_STATES).
     """
+    alpha = 0.0
     local_energy = np.zeros(N_STATES, dtype=np.float64)
     neighbors_start = adj_indptr[node_idx]
     neighbors_end = adj_indptr[node_idx + 1]
+    sum_weights = max(np.sum(adj_data[neighbors_start:neighbors_end]), 1e-10)  # Avoid division by zero
     for s in range(N_STATES):
-        local_energy[s] = h_weights[s]
         for i in range(neighbors_start, neighbors_end):
             weight = adj_data[i]
             local_energy[s] += weight * interaction_matrix[s, states[adj_indices[i]]]
+    # degree normalization
+    local_energy = local_energy*(1 / sum_weights)**alpha + h_weights
+    if T == 0:
+        return np.argmin(local_energy)  # Deterministic choice at zero temperature
+    # normalize energies for numerical accuracy
     adjusted_energy = (local_energy/T) - np.min(local_energy/T)
     probabilities = np.exp(-adjusted_energy) / np.sum(np.exp(-adjusted_energy))
     new_state = min(np.searchsorted(np.cumsum(probabilities), rng_rolls[node_idx]), N_STATES - 1)
@@ -143,14 +156,17 @@ def _update_node(node_idx, states, adj_indptr, adj_indices, adj_data, interactio
 
 @njit
 def _compute_total_energy(nodes, states, adj_indptr, adj_indices, adj_data, interaction_matrix, h_weights):
+    alpha = 0.0
     total_energy = 0.0
     for node_idx in nodes:
         s = states[node_idx]
-        local_energy = h_weights[s]
+        local_energy = 0.0
         neighbors_start = adj_indptr[node_idx]
         neighbors_end = adj_indptr[node_idx + 1]
+        sum_weights = max(np.sum(adj_data[neighbors_start:neighbors_end]), 1e-10)  # Avoid division by zero
         for i in range(neighbors_start, neighbors_end):
             weight = adj_data[i]
             local_energy += 0.5 * (weight * interaction_matrix[s, states[adj_indices[i]]]) # 0.5 to avoid double on undirected graphs
+        local_energy = local_energy*(1 / sum_weights)**alpha + h_weights[s]
         total_energy += local_energy
     return total_energy
