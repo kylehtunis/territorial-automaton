@@ -3,9 +3,10 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import pickle
 
-def plot_graph(adj_matrix):
+def plot_graph(adj_matrix, pos=None):
     G = nx.from_scipy_sparse_array(adj_matrix)
-    pos = nx.spring_layout(G)
+    if pos is None:
+        pos = nx.spring_layout(G)
     fig = plt.figure(figsize=(10, 10))
     nx.draw(G, pos, node_color='lightblue', edge_color='gray', node_size=10, with_labels=False)
     plt.show()

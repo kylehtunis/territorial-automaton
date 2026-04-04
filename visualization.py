@@ -7,7 +7,7 @@ from tqdm import tqdm
 from territorial_automaton import N_STATES
 
 # State colors: Strong A (blue), Weak A (lightblue), Factionless (gray), Weak B (salmon), Strong B (red)
-STATE_COLORS = ['#1f77b4','#aec7e8','#999999', '#ff9896', '#d62728']
+STATE_COLORS = ['#1f77b4','#aec7e8','#444444', '#ff9896', '#d62728']
 STATE_LABELS = ['Strong A', 'Weak A', 'Factionless', 'Weak B', 'Strong B']
 
 def animate_simulation(metrics, adj_matrix, pos=None, interval=200, node_size=50, save_path=None):

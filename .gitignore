@@ -1,3 +1,9 @@
-test_topologies/
+test_topologies/**
 **__pycache__**
 **.gif
+**.mp4
+**.png
+CLAUDE.md
+.claude/**
+figures/**
+**.h5

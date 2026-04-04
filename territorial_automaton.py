@@ -3,11 +3,11 @@ from scipy.sparse import csr_matrix
 from numba import njit
 from tqdm import tqdm
 
-_STRONG_A = np.int8(0)
-_WEAK_A = np.int8(1)
-_FACTIONLESS = np.int8(2)
-_WEAK_B = np.int8(3)
-_STRONG_B = np.int8(4)
+STRONG_A = np.int8(0)
+WEAK_A = np.int8(1)
+FACTIONLESS = np.int8(2)
+WEAK_B = np.int8(3)
+STRONG_B = np.int8(4)
 N_STATES = 5
 
 class TA_Params:
@@ -23,7 +23,7 @@ class TA_Params:
         self.g = g
         self.seed = seed
         if initial_state is None:
-            self.initial_state = np.full(self.N, _FACTIONLESS, dtype=np.int8)
+            self.initial_state = np.full(self.N, FACTIONLESS, dtype=np.int8)
         else:
             self.initial_state = initial_state
 
@@ -33,11 +33,22 @@ class TA_Params:
 class TA_Metrics:
     def __init__(self, state, energy, scalars, snapshot=None):
         self.faction_sizes = np.bincount(state, minlength=N_STATES)
+        self.faction_a = self.faction_sizes[STRONG_A] + self.faction_sizes[WEAK_A]
+        self.faction_b = self.faction_sizes[STRONG_B] + self.faction_sizes[WEAK_B]
         self.energy = energy
         self.order = np.mean(scalars[state])  # Map states to [1, w, 0, -w, -1] and take mean
         self.snapshot = snapshot
     def __str__(self):
         return f"TA_Metrics(faction_sizes={self.faction_sizes}, energy={self.energy:.4f}, order={self.order:.4f}, snapshot={'Yes' if self.snapshot is not None else 'No'})"
+    
+class TA_Result:
+    def __init__(self, metrics: list[TA_Metrics]):
+        self.metrics = metrics
+        self.orders = np.array([m.order for m in metrics])
+        self.energies = np.array([m.energy for m in metrics])
+        self.faction_sizes = np.zeros((N_STATES, len(metrics)), dtype=np.int32)
+        for i in range(N_STATES):
+            self.faction_sizes[i] = np.array([m.faction_sizes[i] for m in metrics])
     
 class TerritorialAutomaton:
     def __init__(self, params):
@@ -101,7 +112,7 @@ class TerritorialAutomaton:
             )
             snapshot = np.copy(self.state) if snapshots else None
             metrics.append(TA_Metrics(self.state, energy, self.state_scalars, snapshot))
-        return metrics
+        return TA_Result(metrics)
 
 @njit
 def _step(node_order, states, adj_indptr, adj_indices, adj_data, interaction_matrix, h_weights, T, rng_rolls):
@@ -147,10 +158,16 @@ def _update_node(node_idx, states, adj_indptr, adj_indices, adj_data, interactio
     # degree normalization
     local_energy = local_energy*(1 / sum_weights)**alpha + h_weights
     if T == 0:
-        return np.argmin(local_energy)  # Deterministic choice at zero temperature
+        min_energy = np.min(local_energy)
+        # Find all states tied at the minimum and pick randomly among them
+        tied = np.where(local_energy == min_energy)[0]
+        if len(tied) == 1:
+            return tied[0]
+        return tied[min(np.searchsorted(np.linspace(0, 1, len(tied) + 1)[1:], rng_rolls[node_idx]), len(tied) - 1)]
     # normalize energies for numerical accuracy
     adjusted_energy = (local_energy/T) - np.min(local_energy/T)
-    probabilities = np.exp(-adjusted_energy) / np.sum(np.exp(-adjusted_energy))
+    boltz = np.exp(-adjusted_energy)
+    probabilities = boltz / np.sum(boltz)
     new_state = min(np.searchsorted(np.cumsum(probabilities), rng_rolls[node_idx]), N_STATES - 1)
     return new_state
 
