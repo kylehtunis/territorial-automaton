@@ -11,7 +11,7 @@ STRONG_B = np.int8(4)
 N_STATES = 5
 
 class TA_Params:
-    def __init__(self, adj_matrix, initial_state=None, T=1.0, h=0.0, w=0.5, g=0.5, seed=None):
+    def __init__(self, adj_matrix, initial_state=None, T=1.0, h=0.0, theta=0.5, kappa=0.5, seed=None):
         self.adj_matrix = adj_matrix
         self.adj_indptr = adj_matrix.indptr
         self.adj_indices = adj_matrix.indices
@@ -19,8 +19,8 @@ class TA_Params:
         self.N = adj_matrix.shape[0]
         self.T = T
         self.h = h
-        self.w = w
-        self.g = g
+        self.theta = theta
+        self.kappa = kappa
         self.seed = seed
         if initial_state is None:
             self.initial_state = np.full(self.N, FACTIONLESS, dtype=np.int8)
@@ -28,7 +28,7 @@ class TA_Params:
             self.initial_state = initial_state
 
     def __str__(self):
-        return f"TA_Params(N={self.N}, T={self.T}, h={self.h}, w={self.w}, g={self.g})"
+        return f"TA_Params(N={self.N}, T={self.T}, h={self.h}, theta={self.theta}, kappa={self.kappa})"
     
 class TA_Metrics:
     def __init__(self, state, energy, scalars, snapshot=None):
@@ -36,7 +36,7 @@ class TA_Metrics:
         self.faction_a = self.faction_sizes[STRONG_A] + self.faction_sizes[WEAK_A]
         self.faction_b = self.faction_sizes[STRONG_B] + self.faction_sizes[WEAK_B]
         self.energy = energy
-        self.order = np.mean(scalars[state])  # Map states to [1, w, 0, -w, -1] and take mean
+        self.order = np.mean(scalars[state])  # Map states to [1, theta, 0, -theta, -1] and take mean
         self.snapshot = snapshot
     def __str__(self):
         return f"TA_Metrics(faction_sizes={self.faction_sizes}, energy={self.energy:.4f}, order={self.order:.4f}, snapshot={'Yes' if self.snapshot is not None else 'No'})"
@@ -56,7 +56,7 @@ class TerritorialAutomaton:
         self.state = np.copy(params.initial_state)
         self.nodes = np.arange(self.params.N)
         self.interaction_matrix = self.compute_interaction_matrix()
-        self.state_scalars = np.array([1, self.params.w, 0, -self.params.w, -1], dtype=np.float32)
+        self.state_scalars = np.array([1, self.params.theta, 0, -self.params.theta, -1], dtype=np.float32)
         self.h_weights = -1 * self.params.h * self.state_scalars
         if self.params.seed is not None:
             self.rng = np.random.default_rng(self.params.seed)
@@ -64,11 +64,11 @@ class TerritorialAutomaton:
             self.rng = np.random.default_rng()
 
     def compute_interaction_matrix(self):
-        interaction_matrix = np.array([[-1, -self.params.w, self.params.g, self.params.w, 1],
-                                       [-self.params.w, -(self.params.w**2), self.params.g*self.params.w, self.params.w**2, self.params.w],
-                                       [self.params.g, self.params.g*self.params.w, 0, self.params.w*self.params.g, self.params.g],
-                                       [self.params.w, self.params.w**2, self.params.g*self.params.w, -self.params.w**2, -self.params.w],
-                                        [1, self.params.w, self.params.g, -self.params.w, -1]])
+        interaction_matrix = np.array([[-1, -self.params.theta, self.params.kappa, self.params.theta, 1],
+                                       [-self.params.theta, -(self.params.theta**2), self.params.kappa*self.params.theta, self.params.theta**2, self.params.theta],
+                                       [self.params.kappa, self.params.kappa*self.params.theta, 0, self.params.theta*self.params.kappa, self.params.kappa],
+                                       [self.params.theta, self.params.theta**2, self.params.kappa*self.params.theta, -self.params.theta**2, -self.params.theta],
+                                        [1, self.params.theta, self.params.kappa, -self.params.theta, -1]])
         return interaction_matrix
 
     def step(self):
@@ -87,12 +87,16 @@ class TerritorialAutomaton:
             rng_rolls
         )
 
-    def run(self, n_warmup, n_experiment, dynamic_T=None, snapshots=False, progbar=False):
+    def run(self, n_warmup, n_experiment, initial_state=None, dynamic_T=None, snapshots=False, progbar=False):
         if dynamic_T is not None:
             dynamic_T = np.asarray(dynamic_T, dtype=np.float64)
             if dynamic_T.shape != (n_experiment,):
                 raise ValueError(f"dynamic_T must have length n_experiment ({n_experiment}), got {dynamic_T.shape}")
         self.state = np.copy(self.params.initial_state) # Ensure we start from the initial state
+        if initial_state is not None:
+            if len(initial_state) != self.params.N:
+                raise ValueError(f"initial_state must have length N ({self.params.N}), got {len(initial_state)}")
+            self.state = np.copy(initial_state)
         metrics = []
         self.T = self.params.T
         for _ in tqdm(range(n_warmup), desc="Warming up", disable=not progbar):

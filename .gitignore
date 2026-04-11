@@ -4,6 +4,7 @@ test_topologies/**
 **.mp4
 **.png
 CLAUDE.md
+plan.md
 .claude/**
 figures/**
 **.h5

@@ -33,7 +33,7 @@ class Store:
         topology_info : dict
             Metadata about the topology, e.g. {"type": "grid", "rows": 50, "cols": 50}.
         base_params : dict
-            Default parameter values, e.g. {"w": 0.5, "g": 0.5, "h": 0.0, "T": 1.0}.
+            Default parameter values, e.g. {"theta": 0.5, "kappa": 0.5, "h": 0.0, "T": 1.0}.
         sweep_params : list of str, optional
             Names of parameters being swept, e.g. ["T"] or ["T", "h"].
         n_warmup : int
