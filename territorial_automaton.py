@@ -112,7 +112,18 @@ class TerritorialAutomaton:
         self.T = self.params.T
         for _ in tqdm(range(n_warmup), desc="Warming up", disable=not progbar):
             self.step()
-        for i in tqdm(range(n_experiment), desc="Running experiment", disable=not progbar):
+        energy = _compute_total_energy(
+            self.nodes,
+            self.state,
+            self.params.adj_indptr,
+            self.params.adj_indices,
+            self.params.adj_data,
+            self.interaction_matrix,
+            self.h_weights
+        )
+        snapshot = np.copy(self.state) if snapshots else None
+        metrics.append(TA_Metrics(self.state, energy, self.state_scalars, snapshot))
+        for i in tqdm(range(n_experiment-1), desc="Running experiment", disable=not progbar):
             if dynamic_T is not None:
                 self.T = dynamic_T[i]
             self.step()

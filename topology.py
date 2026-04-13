@@ -18,6 +18,13 @@ def grid(N, periodic=False):
     pos = np.array([[col, -row] for row, col in G.nodes()], dtype=np.float64)
     return adj, pos
 
+def barabasi_albert(N, m):
+    G = nx.barabasi_albert_graph(N, m)
+    adj = nx.adjacency_matrix(G)
+    pos = nx.spring_layout(G, seed=42)
+    pos_array = np.array([pos[i] for i in range(N)], dtype=np.float64)
+    return adj, pos_array
+
 def load_graphml(filename):
     G = nx.read_graphml(filename)
     adj = nx.adjacency_matrix(G)
