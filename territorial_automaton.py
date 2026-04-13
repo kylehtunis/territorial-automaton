@@ -9,6 +9,7 @@ FACTIONLESS = np.int8(2)
 WEAK_B = np.int8(3)
 STRONG_B = np.int8(4)
 N_STATES = 5
+STATES = [STRONG_A, WEAK_A, FACTIONLESS, WEAK_B, STRONG_B]
 
 class TA_Params:
     def __init__(self, adj_matrix, initial_state=None, T=1.0, h=0.0, theta=0.5, kappa=0.5, seed=None):
@@ -49,6 +50,16 @@ class TA_Result:
         self.faction_sizes = np.zeros((N_STATES, len(metrics)), dtype=np.int32)
         for i in range(N_STATES):
             self.faction_sizes[i] = np.array([m.faction_sizes[i] for m in metrics])
+
+    @classmethod
+    def from_arrays(cls, orders, energies, faction_sizes):
+        """Reconstruct a TA_Result from stored arrays (no TA_Metrics objects)."""
+        result = object.__new__(cls)
+        result.metrics = None
+        result.orders = orders
+        result.energies = energies
+        result.faction_sizes = faction_sizes
+        return result
     
 class TerritorialAutomaton:
     def __init__(self, params):

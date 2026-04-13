@@ -6,6 +6,8 @@ import h5py
 import numpy as np
 from scipy.sparse import csr_matrix
 
+import territorial_automaton as ta
+
 
 class Store:
     """HDF5-backed storage for a single exploration (set of related simulation runs).
@@ -160,7 +162,21 @@ class Store:
         pos = topo["pos"][:] if "pos" in topo else None
         return adj, pos
 
+    def load_result(self, run_id):
+        """Load a single run as a TA_Result (reconstructed from stored arrays)."""
+        grp = self._f["runs"][run_id]
+        return ta.TA_Result.from_arrays(
+            orders=grp["order"][:],
+            energies=grp["energy"][:],
+            faction_sizes=grp["faction_sizes"][:].T,  # stored as (n_exp, N_STATES), TA_Result expects (N_STATES, n_exp)
+        )
+
     # -- Info --
+
+    def get_seed_index(self):
+        """Return dict mapping seed -> run_id for all runs in this file."""
+        return {int(self._f["runs"][rid].attrs["seed"]): rid
+                for rid in self._f["runs"].keys()}
 
     @property
     def run_ids(self):
